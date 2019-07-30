@@ -19,6 +19,13 @@ from sklearn import metrics
 import scipy.io
 from sklearn.model_selection import StratifiedKFold
 
+USE_CUDA = torch.cuda.is_available()
+
+def cuda(v):
+    if USE_CUDA:
+        return v.cuda()
+    return v
+
 class MyDataset(Dataset):
     def __init__(self, bags):
         self.bags = bags
@@ -102,26 +109,28 @@ for train, test in skf.split(bags, labels):
     loader_pos = DataLoader(pos, batch_size=1)
     loader_neg = DataLoader(neg, batch_size=1)
     epochs=10
-    mlp=Net(230)
-    mlp.cuda()
+    mlp=cuda(Net(230))
     optimizer = optim.Adam(mlp.parameters())    
     all_losses=[]
     for e in range(epochs):
         l=0.0
         for idx_p, pbag in enumerate(loader_pos):
             pbag=pbag.float()
-            pbag=Variable(pbag).type(torch.cuda.FloatTensor)
+            pbag=cuda(Variable(pbag))
+#            if torch.cuda.is_available():
+#                pbag = pbag.type(torch.cuda.FloatTensor)
             p_scores=mlp.forward(pbag[0])
             max_p=torch.max(p_scores)
     
             for idx_n, nbag in enumerate(loader_neg):
                 nbag=nbag.float()
-                nbag=Variable(nbag).type(torch.cuda.FloatTensor)
+                nbag=cuda(Variable(nbag))
                 n_scores=mlp.forward(nbag[0])
 
                 max_n=torch.max(n_scores)
                 z=np.array([0.0])
-                loss=torch.max(Variable(torch.from_numpy(z)).type(torch.cuda.FloatTensor), (max_n-max_p+1))
+                zz = cuda(Variable(torch.from_numpy(z)).type(torch.FloatTensor))
+                loss=torch.max(zz, (max_n-max_p+1))
 #                loss=torch.max(torch.tensor(0.0), (max_n-max_p+1))
                 l=l+float(loss)
     
@@ -141,7 +150,7 @@ for train, test in skf.split(bags, labels):
         param.requires_grad =False
     for idx_ts, tsbag in enumerate(loader_ts):
         tsbag=tsbag.float()
-        tsbag=Variable(tsbag).type(torch.cuda.FloatTensor)
+        tsbag=cuda(Variable(tsbag))
         scores=mlp.forward(tsbag[0])
 
         predictions.append(float(torch.max(scores)))
